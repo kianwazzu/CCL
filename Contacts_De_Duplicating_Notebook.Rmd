@@ -1,0 +1,80 @@
+---
+title: "Contact List De-Duplicating"
+output: html_notebook
+---
+Enter Input File Name Here. Accepts local .xls or .xlsx files
+example: infile <- "rawcontactslist.xls"
+```{r}
+infile <- "FILE NAME HERE"
+```
+Optional: Enter Output Folder Name (OutPath) and Output File (outfilename) Name Here.
+```{r}
+OutPath <- "FOLDERNAMEHERE"
+#example: OutPath <- "C:/Users/kiana/Downloads/" - forward slashes "/" not "\"
+
+#example: outfilename <- "cleanlist.csv"
+outfilename <- "FILE NAME HERE"
+```
+Output File will be named same as input with _clean appended as a csv if no outfilename supplied
+example:input file: "rawcontactslist.xls" 
+example output file: "rawcontactslist_clean.csv"
+Output file will be saved in this directory is no OutPath supplied
+
+
+
+Deduplicating Process
+```{r}
+library(tidyverse)
+library(readxl)
+
+if(endsWith(infile, ".xls") | endsWith(infile,".xlsx")){
+#read in the file, sheet by sheet 
+for (i in 1:length(excel_sheets(infile))) {
+  #read in a sheet
+to_append <- read_excel(infile, sheet = i)
+#add a language and id number column. id is just first number = number of sheet, then just append a 0 and the row number
+to_append <- to_append %>% mutate(language = excel_sheets(infile)[i], user_id = paste(i,"0",row_number(),sep = ""))
+#if reading in first sheet, just set list =, otherwise append the sheet
+if(i ==1){
+  rawlist <- to_append
+}else{
+  rawlist <- rawlist %>% bind_rows(to_append)}
+}
+#cleaning up and reformatting data
+rawlist <- rawlist %>% pivot_longer(cols = 1:3) %>% rename(phone_type = name, number=value)
+#this makes the data longer, so there is only a lang, type, id, and number column, no separate columns anymore for each type
+
+#get rid of all the null entries
+cleaned <- rawlist %>% filter(number!="NULL")
+#get rid of dases in numbers
+cleaned$number <- gsub("-","",cleaned$number)
+#de duplicating data 
+cleaned <- cleaned %>% distinct(number, .keep_all = TRUE)
+#how this works is it only returns the columns where a distinct number is found. 
+#it returns the first instance of the number, and leaves out the rest
+
+#check that there are no duplicates remaining 
+if(unique(duplicated(cleaned))== FALSE & length(unique(duplicated(cleaned)))==1){
+  print("List De-Duped")
+  #renaming columns, and changing order of columns, no actual changes made
+  cleaned <- cleaned %>% rename(phone = number) %>% relocate(phone,user_id,language,phone_type) 
+  
+  #save to a csv
+  if(outfilename == "FILE NAME HERE" | !endsWith(outfilename,".csv")){#no name supplied or incorrectedly formatted name
+    filename <- sub("\\..*","",infile) %>% paste("_clean.csv",sep = "") #default output file naming 
+  }else{filename <- outfilename}
+  
+if(OutPath == "FOLDERNAMEHERE" ){ #setting file path 
+  print("no OutPath supplied, defaulted to this directory")
+}else{
+   if(!endsWith(OutPath,"/")){OutPath <- paste(OutPath,"/",sep = "")} #append / at end if not one already
+  filename <- paste(OutPath,filename,sep = "")
+  print(paste("OutPath:",OutPath))
+}
+  
+  print(paste("output file saved:",filename))
+  write_csv(cleaned,file = filename)
+}
+}else{print("Invalid input file")}
+
+```
